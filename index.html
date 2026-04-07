@@ -1455,22 +1455,24 @@
                             </button>
                         </div>
                         <div class="flex gap-2">
-                            <button onclick="app.showItemModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm md:text-base whitespace-nowrap">
-                                <i class="fas fa-plus"></i> <span class="hidden sm:inline">${this.t('addNew')}</span>
-                            </button>
-                            <div class="relative group">
-                                <button class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm whitespace-nowrap">
-                                    <i class="fas fa-file-excel"></i> <span class="hidden sm:inline">${this.t('export')}</span>
-                                </button>
-                                <div class="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 hidden group-hover:block z-20">
-                                    <button onclick="app.exportItems()" class="block w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm text-gray-700 dark:text-gray-300 first:rounded-t-lg">${this.t('exportItems')}</button>
-                                    <button onclick="app.downloadItemsTemplate()" class="block w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm text-gray-700 dark:text-gray-300 last:rounded-b-lg border-t border-gray-200 dark:border-gray-700">${this.t('downloadTemplate')}</button>
-                                </div>
-                            </div>
-                            <button onclick="app.showImportItemsModal()" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm whitespace-nowrap">
-                                <i class="fas fa-upload"></i> <span class="hidden sm:inline">${this.t('import')}</span>
-                            </button>
-                        </div>
+    <button onclick="app.showItemModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm md:text-base whitespace-nowrap">
+        <i class="fas fa-plus"></i> <span class="hidden sm:inline">${this.t('addNew')}</span>
+    </button>
+    <!-- REPLACE THE EXPORT DROPDOWN WITH THIS -->
+    <div class="relative" id="exportDropdownContainer">
+        <button onclick="app.toggleExportDropdown()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm whitespace-nowrap">
+            <i class="fas fa-file-excel"></i> <span class="hidden sm:inline">${this.t('export')}</span> <i class="fas fa-chevron-down text-xs"></i>
+        </button>
+        <div id="exportDropdown" class="hidden absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 z-20">
+            <button onclick="app.exportItems(); app.hideExportDropdown()" class="block w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm text-gray-700 dark:text-gray-300 first:rounded-t-lg">${this.t('exportItems')}</button>
+            <button onclick="app.downloadItemsTemplate(); app.hideExportDropdown()" class="block w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm text-gray-700 dark:text-gray-300 last:rounded-b-lg border-t border-gray-200 dark:border-gray-700">${this.t('downloadTemplate')}</button>
+        </div>
+    </div>
+    <!-- END REPLACE -->
+    <button onclick="app.showImportItemsModal()" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm whitespace-nowrap">
+        <i class="fas fa-upload"></i> <span class="hidden sm:inline">${this.t('import')}</span>
+    </button>
+</div>
                     </div>
                     
                     <div class="table-container">
@@ -2008,7 +2010,324 @@
                     this.showNotification(error.message, 'error');
                 }
             },
+            // Toggle dropdowns
+            toggleExportDropdown() {
+                const dropdown = document.getElementById('exportDropdown');
+                if (dropdown) {
+                    dropdown.classList.toggle('hidden');
+                    // Close when clicking outside
+                    setTimeout(() => {
+                        document.addEventListener('click', this.closeExportDropdown);
+                    }, 0);
+                }
+            },
 
+            hideExportDropdown() {
+                const dropdown = document.getElementById('exportDropdown');
+                if (dropdown) {
+                    dropdown.classList.add('hidden');
+                }
+                document.removeEventListener('click', this.closeExportDropdown);
+            },
+
+            closeExportDropdown(e) {
+                const container = document.getElementById('exportDropdownContainer');
+                if (container && !container.contains(e.target)) {
+                    app.hideExportDropdown();
+                }
+            },
+
+            // Stock page dropdowns
+            toggleStockExportDropdown() {
+                const dropdown = document.getElementById('stockExportDropdown');
+                if (dropdown) {
+                    dropdown.classList.toggle('hidden');
+                    setTimeout(() => {
+                        document.addEventListener('click', this.closeStockExportDropdown);
+                    }, 0);
+                }
+            },
+
+            hideStockExportDropdown() {
+                const dropdown = document.getElementById('stockExportDropdown');
+                if (dropdown) {
+                    dropdown.classList.add('hidden');
+                }
+                document.removeEventListener('click', this.closeStockExportDropdown);
+            },
+// Export Stock to Excel
+async exportStock() {
+    try {
+        // Fetch stock data with related info
+        const { data: stockData, error } = await this.supabase
+            .from('stock_view')
+            .select('*')
+            .order('item_name');
+        
+        if (error) throw error;
+        
+        if (!stockData || stockData.length === 0) {
+            this.showNotification('No stock data to export', 'error');
+            return;
+        }
+        
+        // Format data for export
+        const exportData = stockData.map(s => ({
+            'Item Name': s.item_name,
+            'Category': s.category_name || '',
+            'Warehouse': s.warehouse_name,
+            'Quantity': s.quantity,
+            'Last Updated': s.updated_at ? new Date(s.updated_at).toLocaleString() : ''
+        }));
+        
+        const ws = XLSX.utils.json_to_sheet(exportData);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Stock");
+        XLSX.writeFile(wb, `Stock_Export_${new Date().toISOString().split('T')[0]}.xlsx`);
+        this.showNotification(this.t('exportSuccess') || 'Export successful', 'success');
+    } catch (error) {
+        console.error('Export error:', error);
+        this.showNotification('Export failed: ' + error.message, 'error');
+    }
+},
+
+// Download Stock Import Template
+downloadStockTemplate() {
+    const template = [
+        { 
+            'ItemName': 'Sample Item 1', 
+            'Warehouse': 'Main Warehouse', 
+            'Quantity': 10 
+        },
+        { 
+            'ItemName': 'Sample Item 2', 
+            'Warehouse': 'Secondary Storage', 
+            'Quantity': 5 
+        },
+        { 
+            'ItemName': 'Laptop Dell', 
+            'Warehouse': 'Electronics WH', 
+            'Quantity': 3 
+        }
+    ];
+    
+    const ws = XLSX.utils.json_to_sheet(template);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Stock Import Template");
+    
+    // Add instructions as a second sheet (optional but helpful)
+    const instructions = [
+        { 'Instructions': '1. ItemName must match existing item names exactly' },
+        { 'Instructions': '2. Warehouse must match existing warehouse names exactly' },
+        { 'Instructions': '3. Quantity should be the absolute stock level (not delta)' },
+        { 'Instructions': '4. Existing stock will be updated, new entries will be created' },
+        { 'Instructions': '5. Do not change column headers' }
+    ];
+    const wsInstructions = XLSX.utils.json_to_sheet(instructions);
+    XLSX.utils.book_append_sheet(wb, wsInstructions, "Instructions");
+    
+    XLSX.writeFile(wb, "Stock_Import_Template.xlsx");
+    this.showNotification('Template downloaded', 'success');
+},
+
+// Import Stock from Excel
+async showImportStockModal() {
+    const modal = document.createElement('div');
+    modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 modal backdrop-blur-sm p-4';
+    modal.innerHTML = `
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-lg mx-4 fade-in border border-gray-200 dark:border-gray-700">
+            <h3 class="text-lg font-semibold mb-4 text-gray-800 dark:text-white">${this.t('importStock')}</h3>
+            
+            <div class="space-y-4">
+                <div class="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg text-sm text-blue-800 dark:text-blue-300">
+                    <p class="font-medium mb-2">Required Columns:</p>
+                    <ul class="list-disc list-inside space-y-1 text-xs">
+                        <li><strong>ItemName</strong> - Must match existing item</li>
+                        <li><strong>Warehouse</strong> - Must match existing warehouse</li>
+                        <li><strong>Quantity</strong> - New stock quantity (absolute value)</li>
+                    </ul>
+                    <p class="mt-2 text-xs">Note: This will set the stock to the specified quantity (adds if exists).</p>
+                </div>
+                
+                <div class="file-input-wrapper w-full">
+                    <input type="file" id="importStockFile" accept=".xlsx,.xls,.csv" onchange="app.handleStockImport(this)" class="hidden">
+                    <label for="importStockFile" class="flex items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg cursor-pointer hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors">
+                        <div class="text-center">
+                            <i class="fas fa-cloud-upload-alt text-3xl text-gray-400 dark:text-gray-500 mb-2"></i>
+                            <p class="text-sm text-gray-600 dark:text-gray-400">${this.t('uploadFile')}</p>
+                            <p class="text-xs text-gray-400 dark:text-gray-500 mt-1">Excel or CSV</p>
+                        </div>
+                    </label>
+                </div>
+                
+                <div id="stockImportPreview" class="hidden max-h-48 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-lg p-3">
+                    <p class="text-sm font-medium mb-2 text-gray-700 dark:text-gray-300">Preview:</p>
+                    <div id="stockImportPreviewContent"></div>
+                </div>
+            </div>
+            
+            <div class="mt-6 flex justify-end gap-2">
+                <button onclick="this.closest('.modal').remove()" class="px-4 py-2 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white border border-gray-300 dark:border-gray-600 rounded-lg">
+                    ${this.t('cancel')}
+                </button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+},
+
+async handleStockImport(input) {
+    const file = input.files[0];
+    if (!file) return;
+    
+    try {
+        const data = await file.arrayBuffer();
+        const workbook = XLSX.read(data);
+        const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+        const jsonData = XLSX.utils.sheet_to_json(worksheet);
+        
+        if (jsonData.length === 0) {
+            this.showNotification(this.t('invalidFile'), 'error');
+            return;
+        }
+        
+        // Fetch existing items and warehouses for validation
+        const [{ data: items }, { data: warehouses }] = await Promise.all([
+            this.supabase.from('items').select('id, name'),
+            this.supabase.from('warehouses').select('id, name')
+        ]);
+        
+        // Validate data
+        const validatedData = [];
+        const errors = [];
+        
+        jsonData.forEach((row, index) => {
+            const itemName = row.ItemName || row.itemName || row['Item Name'];
+            const warehouseName = row.Warehouse || row.warehouse;
+            const quantity = parseInt(row.Quantity || row.quantity);
+            
+            if (!itemName || !warehouseName || isNaN(quantity)) {
+                errors.push(`Row ${index + 1}: Missing required fields`);
+                return;
+            }
+            
+            const item = items.find(i => i.name.toLowerCase() === itemName.toLowerCase());
+            const warehouse = warehouses.find(w => w.name.toLowerCase() === warehouseName.toLowerCase());
+            
+            if (!item) {
+                errors.push(`Row ${index + 1}: Item "${itemName}" not found`);
+                return;
+            }
+            if (!warehouse) {
+                errors.push(`Row ${index + 1}: Warehouse "${warehouseName}" not found`);
+                return;
+            }
+            
+            validatedData.push({
+                item_id: item.id,
+                warehouse_id: warehouse.id,
+                item_name: item.name,
+                warehouse_name: warehouse.name,
+                quantity: quantity
+            });
+        });
+        
+        // Show preview
+        const previewDiv = document.getElementById('stockImportPreview');
+        const previewContent = document.getElementById('stockImportPreviewContent');
+        previewDiv.classList.remove('hidden');
+        
+        let previewHTML = `
+            <table class="w-full text-xs mb-3">
+                <thead class="bg-gray-100 dark:bg-gray-700">
+                    <tr>
+                        <th class="p-2 text-left">Item</th>
+                        <th class="p-2 text-left">Warehouse</th>
+                        <th class="p-2 text-left">Qty</th>
+                        <th class="p-2 text-left">Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${validatedData.slice(0, 5).map(row => `
+                        <tr class="border-b border-gray-200 dark:border-gray-700">
+                            <td class="p-2">${row.item_name}</td>
+                            <td class="p-2">${row.warehouse_name}</td>
+                            <td class="p-2">${row.quantity}</td>
+                            <td class="p-2 text-green-600">Ready</td>
+                        </tr>
+                    `).join('')}
+                    ${validatedData.length > 5 ? `<tr><td colspan="4" class="p-2 text-center text-gray-500">...and ${validatedData.length - 5} more</td></tr>` : ''}
+                </tbody>
+            </table>
+        `;
+        
+        if (errors.length > 0) {
+            previewHTML += `
+                <div class="bg-red-50 dark:bg-red-900/20 p-3 rounded text-red-800 dark:text-red-300 text-xs mb-3">
+                    <p class="font-medium">Errors found:</p>
+                    <ul class="list-disc list-inside">
+                        ${errors.slice(0, 5).map(e => `<li>${e}</li>`).join('')}
+                        ${errors.length > 5 ? `<li>...and ${errors.length - 5} more</li>` : ''}
+                    </ul>
+                </div>
+            `;
+        }
+        
+        if (validatedData.length > 0) {
+            previewHTML += `
+                <button onclick="app.confirmStockImport(${JSON.stringify(validatedData).replace(/"/g, '&quot;')})" 
+                    class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg text-sm">
+                    Import ${validatedData.length} Records
+                </button>
+            `;
+        }
+        
+        previewContent.innerHTML = previewHTML;
+        
+    } catch (error) {
+        console.error(error);
+        this.showNotification(this.t('importError'), 'error');
+    }
+},
+
+async confirmStockImport(data) {
+    try {
+        let imported = 0;
+        
+        for (const row of data) {
+            // Use upsert to insert or update stock
+            const { error } = await this.supabase
+                .from('stock')
+                .upsert({
+                    item_id: row.item_id,
+                    warehouse_id: row.warehouse_id,
+                    quantity: row.quantity,
+                    updated_at: new Date().toISOString()
+                }, {
+                    onConflict: ['item_id', 'warehouse_id']
+                });
+            
+            if (error) {
+                console.error('Error importing row:', error);
+                continue;
+            }
+            imported++;
+        }
+        
+        document.querySelector('.modal').remove();
+        this.showNotification(`${this.t('importSuccess')}: ${imported} records imported`, 'success');
+        this.refreshCurrentPage();
+        
+    } catch (error) {
+        this.showNotification(error.message, 'error');
+    }
+},
+            closeStockExportDropdown(e) {
+                const container = document.getElementById('stockExportDropdownContainer');
+                if (container && !container.contains(e.target)) {
+                    app.hideStockExportDropdown();
+                }
+            },
             async deleteWarehouse(id) {
                 if (!confirm(this.t('confirmDelete'))) return;
 
@@ -2073,10 +2392,21 @@
                             </button>
                         </div>
                         <div class="flex gap-2">
-                            <button onclick="app.exportStock()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm whitespace-nowrap">
-                                <i class="fas fa-file-excel"></i> <span class="hidden sm:inline">${this.t('export')}</span>
-                            </button>
-                        </div>
+    <!-- REPLACE THE EXPORT DROPDOWN WITH THIS -->
+    <div class="relative" id="stockExportDropdownContainer">
+        <button onclick="app.toggleStockExportDropdown()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm whitespace-nowrap">
+            <i class="fas fa-file-excel"></i> <span class="hidden sm:inline">${this.t('export')}</span> <i class="fas fa-chevron-down text-xs"></i>
+        </button>
+        <div id="stockExportDropdown" class="hidden absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 z-20">
+            <button onclick="app.exportStock(); app.hideStockExportDropdown()" class="block w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm text-gray-700 dark:text-gray-300 first:rounded-t-lg">${this.t('exportStock')}</button>
+            <button onclick="app.downloadStockTemplate(); app.hideStockExportDropdown()" class="block w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm text-gray-700 dark:text-gray-300 last:rounded-b-lg border-t border-gray-200 dark:border-gray-700">${this.t('downloadTemplate')}</button>
+        </div>
+    </div>
+    <!-- END REPLACE -->
+    <button onclick="app.showImportStockModal()" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm whitespace-nowrap">
+        <i class="fas fa-upload"></i> <span class="hidden sm:inline">${this.t('import')}</span>
+    </button>
+</div>
                     </div>
                     
                     <div class="table-container">
@@ -2222,12 +2552,6 @@
                     this.showNotification(error.message, 'error');
                 }
             },
-
-            exportStock() {
-                // Implementation for stock export
-                this.showNotification(this.t('exportSuccess'), 'success');
-            },
-
             // Borrow Requests
             async renderBorrowRequests(container) {
                 let query = this.supabase
@@ -2446,6 +2770,7 @@
             },
 
             // Borrow Records
+            // Replace the renderBorrowRecords function with this updated version:
             async renderBorrowRecords(container) {
                 let query = this.supabase
                     .from('borrow_records')
@@ -2466,83 +2791,280 @@
                 const paginated = this.paginate(records || []);
 
                 container.innerHTML = `
-                <div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
-                    <div class="p-4 md:p-6 border-b border-gray-200 dark:border-gray-700 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                        <div class="flex flex-col sm:flex-row gap-2 flex-1 w-full">
-                            <select onchange="app.handleFilter('status', this.value)" class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm">
-                                <option value="">${this.t('filterByStatus')}</option>
-                                <option value="active" ${this.filters.status === 'active' ? 'selected' : ''}>${this.t('active')}</option>
-                                <option value="returned" ${this.filters.status === 'returned' ? 'selected' : ''}>${this.t('returned')}</option>
-                            </select>
-                            <button onclick="app.showDirectBorrowModal()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm whitespace-nowrap">
-                                <i class="fas fa-plus"></i> <span class="hidden sm:inline">${this.t('borrowWithoutRequest')}</span>
-                            </button>
-                        </div>
-                    </div>
-                    
-                    <div class="table-container">
-                        <table class="w-full min-w-[800px]">
-                            <thead class="bg-gray-50 dark:bg-gray-700">
-                                <tr>
-                                    <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">${this.t('id')}</th>
-                                    <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">${this.t('borrower')}</th>
-                                    <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">${this.t('items')}</th>
-                                    <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">${this.t('dates')}</th>
-                                    <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">${this.t('status')}</th>
-                                    <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">${this.t('actions')}</th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-                                ${paginated.length > 0 ? paginated.map(record => {
-                    const isOverdue = record.status === 'active' && new Date(record.end_date) < new Date();
-                    return `
-                                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                                            <td class="px-4 md:px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">#${record.id.substr(-6)}</td>
-                                            <td class="px-4 md:px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">${record.profiles?.full_name || '-'}</td>
-                                            <td class="px-4 md:px-6 py-4 text-sm text-gray-900 dark:text-gray-100">
-                                                <div class="space-y-1">
-                                                    ${record.borrow_record_items?.map(it => `
-                                                        <div class="flex items-center gap-2">
-                                                            <span class="font-medium">${it.items?.name}</span>
-                                                            <span class="text-gray-500 dark:text-gray-400 text-xs">(${it.warehouses?.name})</span>
-                                                            <span class="bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded text-xs">${it.quantity} qty</span>
-                                                        </div>
-                                                    `).join('') || ''}
-                                                </div>
-                                            </td>
-                                            <td class="px-4 md:px-6 py-4 whitespace-nowrap text-sm ${isOverdue ? 'text-red-600 font-bold' : 'text-gray-500 dark:text-gray-400'}">
-                                                ${this.formatDate(record.borrowed_at)}<br>
-                                                <span class="text-xs">${this.t('to')}: ${this.formatDate(record.end_date)}</span>
-                                                ${isOverdue ? `<br><span class="text-xs">(${this.t('overdue')})</span>` : ''}
-                                            </td>
-                                            <td class="px-4 md:px-6 py-4 whitespace-nowrap">
-                                                <span class="px-2 py-1 text-xs font-semibold rounded-full ${record.status === 'active' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300' : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'}">
-                                                    ${this.t(record.status)}
-                                                </span>
-                                            </td>
-                                            <td class="px-4 md:px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                                ${record.status === 'active' ? `
-                                                    <button onclick="app.returnItem('${record.id}')" class="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300">
-                                                        ${this.t('markReturned')}
-                                                    </button>
-                                                ` : '-'}
-                                            </td>
-                                        </tr>
-                                    `;
-                }).join('') : `
-                                    <tr>
-                                        <td colspan="6" class="px-6 py-8 text-center text-gray-500 dark:text-gray-400">${this.t('noDataFound')}</td>
-                                    </tr>
-                                `}
-                            </tbody>
-                        </table>
-                    </div>
-                    
-                    ${this.renderPagination(records?.length || 0)}
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+            <div class="p-4 md:p-6 border-b border-gray-200 dark:border-gray-700 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div class="flex flex-col sm:flex-row gap-2 flex-1 w-full">
+                    <select onchange="app.handleFilter('status', this.value)" class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm">
+                        <option value="">${this.t('filterByStatus')}</option>
+                        <option value="active" ${this.filters.status === 'active' ? 'selected' : ''}>${this.t('active')}</option>
+                        <option value="returned" ${this.filters.status === 'returned' ? 'selected' : ''}>${this.t('returned')}</option>
+                    </select>
+                    <button onclick="app.showDirectBorrowModal()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm whitespace-nowrap">
+                        <i class="fas fa-plus"></i> <span class="hidden sm:inline">${this.t('borrowWithoutRequest')}</span>
+                    </button>
                 </div>
-            `;
+            </div>
+            
+            <div class="table-container">
+                <table class="w-full min-w-[800px]">
+                    <thead class="bg-gray-50 dark:bg-gray-700">
+                        <tr>
+                            <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">${this.t('id')}</th>
+                            <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">${this.t('borrower')}</th>
+                            <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">${this.t('items')}</th>
+                            <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">${this.t('dates')}</th>
+                            <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">${this.t('status')}</th>
+                            <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">${this.t('actions')}</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                        ${paginated.length > 0 ? paginated.map(record => {
+                    const isOverdue = record.status === 'active' && new Date(record.end_date) < new Date();
+                    const totalItems = record.borrow_record_items?.length || 0;
+                    const returnedItems = record.borrow_record_items?.filter(i => i.returned_quantity >= i.quantity).length || 0;
+                    const isPartiallyReturned = returnedItems > 0 && returnedItems < totalItems;
+
+                    return `
+                                <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                                    <td class="px-4 md:px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">#${record.id.substr(-6)}</td>
+                                    <td class="px-4 md:px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">${record.profiles?.full_name || '-'}</td>
+                                    <td class="px-4 md:px-6 py-4 text-sm text-gray-900 dark:text-gray-100">
+                                        <div class="space-y-2">
+                                            ${record.borrow_record_items?.map(it => {
+                        const remaining = it.quantity - it.returned_quantity;
+                        const isFullyReturned = remaining === 0;
+                        const isPartiallyReturnedItem = it.returned_quantity > 0 && remaining > 0;
+
+                        return `
+                                                    <div class="flex items-center justify-between bg-gray-50 dark:bg-gray-700/30 p-2 rounded ${isFullyReturned ? 'opacity-60' : ''}">
+                                                        <div class="flex items-center gap-2">
+                                                            <span class="font-medium ${isFullyReturned ? 'line-through text-gray-500' : 'text-gray-900 dark:text-white'}">${it.items?.name}</span>
+                                                            <span class="text-xs text-gray-500 dark:text-gray-400">(${it.warehouses?.name})</span>
+                                                            ${isFullyReturned ? '<span class="text-xs text-green-600 font-medium">✓ Returned</span>' : ''}
+                                                            ${isPartiallyReturnedItem ? `<span class="text-xs text-yellow-600 font-medium">↻ Partial (${it.returned_quantity}/${it.quantity})</span>` : ''}
+                                                        </div>
+                                                        <div class="text-sm text-gray-600 dark:text-gray-400">
+                                                            ${isFullyReturned ?
+                                `<span class="text-green-600 dark:text-green-400">${it.quantity} returned</span>` :
+                                `<span class="${remaining < it.quantity ? 'text-yellow-600 dark:text-yellow-400' : ''}">
+                                                                    ${it.returned_quantity > 0 ? `${it.returned_quantity} of ` : ''}${it.quantity}
+                                                                </span>`
+                            }
+                                                        </div>
+                                                    </div>
+                                                `;
+                    }).join('') || ''}
+                                        </div>
+                                        ${isPartiallyReturned ? `
+                                            <div class="mt-2 text-xs text-yellow-600 dark:text-yellow-400 font-medium">
+                                                Progress: ${returnedItems}/${totalItems} items fully returned
+                                            </div>
+                                        ` : ''}
+                                    </td>
+                                    <td class="px-4 md:px-6 py-4 whitespace-nowrap text-sm ${isOverdue ? 'text-red-600 font-bold' : 'text-gray-500 dark:text-gray-400'}">
+                                        ${this.formatDate(record.borrowed_at)}<br>
+                                        <span class="text-xs">${this.t('to')}: ${this.formatDate(record.end_date)}</span>
+                                        ${isOverdue ? `<br><span class="text-xs">(${this.t('overdue')})</span>` : ''}
+                                    </td>
+                                    <td class="px-4 md:px-6 py-4 whitespace-nowrap">
+                                        <span class="px-2 py-1 text-xs font-semibold rounded-full ${record.status === 'active' ? (isPartiallyReturned ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300' : 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300') : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'}">
+                                            ${isPartiallyReturned ? 'Partial' : this.t(record.status)}
+                                        </span>
+                                    </td>
+                                    <td class="px-4 md:px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                        ${record.status === 'active' ? `
+                                            <button onclick="app.showPartialReturnModal('${record.id}')" class="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 mr-3">
+                                                ${returnedItems > 0 ? 'Continue Return' : this.t('markReturned')}
+                                            </button>
+                                        ` : '-'}
+                                    </td>
+                                </tr>
+                            `;
+                }).join('') : `
+                            <tr>
+                                <td colspan="6" class="px-6 py-8 text-center text-gray-500 dark:text-gray-400">${this.t('noDataFound')}</td>
+                            </tr>
+                        `}
+                    </tbody>
+                </table>
+            </div>
+            
+            ${this.renderPagination(records?.length || 0)}
+        </div>
+    `;
             },
 
+            // Add this new function to show partial return modal
+            async showPartialReturnModal(recordId) {
+                const { data: record } = await this.supabase
+                    .from('borrow_records')
+                    .select('*, borrow_record_items(*, items(*), warehouses(*))')
+                    .eq('id', recordId)
+                    .single();
+
+                if (!record) return;
+
+                const modal = document.createElement('div');
+                modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 modal backdrop-blur-sm p-4';
+                modal.innerHTML = `
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-2xl mx-4 fade-in border border-gray-200 dark:border-gray-700 max-h-[90vh] overflow-y-auto">
+            <h3 class="text-lg font-semibold mb-4 text-gray-800 dark:text-white">Process Return - Record #${recordId.substr(-6)}</h3>
+            
+            <form onsubmit="app.processPartialReturn(event, '${recordId}')">
+                <div class="space-y-4 mb-6">
+                    <div class="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg text-sm text-blue-800 dark:text-blue-300 mb-4">
+                        <p class="font-medium mb-1">Instructions:</p>
+                        <p>Enter the quantity being returned for each item. You can return partial quantities.</p>
+                    </div>
+                    
+                    <div id="returnItemsList" class="space-y-3">
+                        ${record.borrow_record_items?.map(it => {
+                    const remaining = it.quantity - it.returned_quantity;
+                    const isFullyReturned = remaining === 0;
+
+                    return `
+                                <div class="border border-gray-200 dark:border-gray-700 rounded-lg p-4 ${isFullyReturned ? 'bg-green-50 dark:bg-green-900/20 opacity-60' : 'bg-gray-50 dark:bg-gray-700/50'}">
+                                    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                        <div class="flex-1">
+                                            <div class="flex items-center gap-2 mb-1">
+                                                <span class="font-medium text-gray-900 dark:text-white text-lg">${it.items?.name}</span>
+                                                ${isFullyReturned ? '<span class="text-green-600 dark:text-green-400 text-sm font-bold">✓ Fully Returned</span>' : ''}
+                                            </div>
+                                            <p class="text-sm text-gray-500 dark:text-gray-400">
+                                                ${it.warehouses?.name} | 
+                                                Borrowed: <span class="font-medium">${it.quantity}</span> | 
+                                                ${it.returned_quantity > 0 ? `Already returned: <span class="font-medium text-yellow-600">${it.returned_quantity}</span> | ` : ''}
+                                                Remaining: <span class="font-medium ${remaining < it.quantity ? 'text-yellow-600' : 'text-blue-600'}">${remaining}</span>
+                                            </p>
+                                        </div>
+                                        
+                                        ${!isFullyReturned ? `
+                                            <div class="flex items-center gap-3">
+                                                <div class="text-right">
+                                                    <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Return Qty</label>
+                                                    <input type="number" 
+                                                        name="return_${it.id}" 
+                                                        data-item-id="${it.item_id}"
+                                                        data-warehouse-id="${it.warehouse_id}"
+                                                        min="0" 
+                                                        max="${remaining}" 
+                                                        value="${remaining}"
+                                                        class="w-24 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                                                        onchange="app.validateReturnQty(this, ${remaining})">
+                                                </div>
+                                            </div>
+                                        ` : `
+                                            <input type="hidden" name="return_${it.id}" value="0">
+                                            <span class="text-green-600 dark:text-green-400 font-medium">Returned</span>
+                                        `}
+                                    </div>
+                                    ${!isFullyReturned ? `
+                                        <div class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                                            <label class="flex items-center gap-2">
+                                                <input type="checkbox" onchange="app.toggleMaxReturn(this, ${remaining})" class="rounded text-blue-600">
+                                                <span>Return all remaining (${remaining})</span>
+                                            </label>
+                                        </div>
+                                    ` : ''}
+                                </div>
+                            `;
+                }).join('') || ''}
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Return Notes (Optional)</label>
+                        <textarea name="returnNotes" rows="2" 
+                            class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                            placeholder="e.g., Item A damaged, Item B good condition..."></textarea>
+                    </div>
+                </div>
+                
+                <div class="flex flex-col-reverse sm:flex-row justify-end gap-2">
+                    <button type="button" onclick="this.closest('.modal').remove()" class="w-full sm:w-auto px-4 py-2 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white border border-gray-300 dark:border-gray-600 rounded-lg">
+                        ${this.t('cancel')}
+                    </button>
+                    <button type="submit" class="w-full sm:w-auto px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg">
+                        Process Return
+                    </button>
+                </div>
+            </form>
+        </div>
+    `;
+                document.body.appendChild(modal);
+            },
+
+            // Helper function to validate return quantity
+            validateReturnQty(input, max) {
+                const val = parseInt(input.value) || 0;
+                if (val < 0) input.value = 0;
+                if (val > max) input.value = max;
+            },
+
+            // Helper to toggle max return
+            toggleMaxReturn(checkbox, max) {
+                const input = checkbox.closest('.border').querySelector('input[type="number"]');
+                if (checkbox.checked) {
+                    input.value = max;
+                } else {
+                    input.value = 0;
+                }
+            },
+
+            // Process the partial return
+            async processPartialReturn(e, recordId) {
+                e.preventDefault();
+                const form = e.target;
+                const notes = form.returnNotes.value;
+
+                const itemsToReturn = [];
+                const inputs = form.querySelectorAll('input[type="number"][name^="return_"]');
+
+                inputs.forEach(input => {
+                    const quantity = parseInt(input.value) || 0;
+                    if (quantity > 0) {
+                        itemsToReturn.push({
+                            item_id: input.dataset.itemId,
+                            warehouse_id: input.dataset.warehouseId,
+                            return_quantity: quantity
+                        });
+                    }
+                });
+
+                if (itemsToReturn.length === 0) {
+                    this.showNotification('Please enter quantity for at least one item to return', 'error');
+                    return;
+                }
+
+                try {
+                    const { data, error } = await this.supabase.rpc('process_partial_return', {
+                        p_record_id: recordId,
+                        p_items: itemsToReturn,
+                        p_notes: notes
+                    });
+
+                    if (error) throw error;
+
+                    document.querySelector('.modal').remove();
+
+                    const result = data;
+                    if (result.status === 'fully_returned') {
+                        this.showNotification(result.message || 'All items returned successfully', 'success');
+                    } else {
+                        this.showNotification(result.message || 'Partial return processed', 'success');
+                    }
+
+                    this.refreshCurrentPage();
+                } catch (error) {
+                    console.error('Return error:', error);
+                    this.showNotification(error.message, 'error');
+                }
+            },
+
+            // Update the old returnItem function to use the new modal
+            async returnItem(recordId) {
+                // Just open the partial return modal - it handles everything
+                this.showPartialReturnModal(recordId);
+            },
             async showDirectBorrowModal() {
                 const { data: users } = await this.supabase.from('profiles').select('*').eq('role', 'borrower');
                 const { data: items } = await this.supabase.from('items').select('*');
