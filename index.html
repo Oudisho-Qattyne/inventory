@@ -1413,112 +1413,106 @@
 
             // Items Management
             async renderItems(container) {
-                let query = this.supabase
-                    .from('items')
-                    .select('*, categories(*)');
+    const { data: categories } = await this.supabase.from('categories').select('*');
+    this.data.categories = categories || [];
 
-                if (this.filters.search) {
-                    query = query.ilike('name', `%${this.filters.search}%`);
-                }
-
-                if (this.filters.category) {
-                    query = query.eq('category_id', this.filters.category);
-                }
-
-                const { data: items, error } = await query.order('created_at', { ascending: false });
-
-                if (error) {
-                    console.error('Error loading items:', error);
-                    container.innerHTML = `<div class="text-red-500 p-4">${this.t('error')}: ${error.message}</div>`;
-                    return;
-                }
-
-                const { data: categories } = await this.supabase.from('categories').select('*');
-                this.data.categories = categories || [];
-                this.data.items = items || [];
-
-                const paginated = this.paginate(items || []);
-
-                container.innerHTML = `
-                    <div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
-                        <div class="p-4 md:p-6 border-b border-gray-200 dark:border-gray-700 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                            <div class="flex flex-col sm:flex-row gap-2 flex-1 w-full">
-                                <input type="text" id="searchInput" placeholder="${this.t('search')}" value="${this.filters.search}"
-                                    oninput="app.handleSearch(this.value)"
-                                    class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none flex-1 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm md:text-base">
-                                <select onchange="app.handleFilter('category', this.value)" class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm">
-                                    <option value="">${this.t('filterByCategory')}</option>
-                                    ${this.data.categories.map(c => `<option value="${c.id}" ${this.filters.category === c.id ? 'selected' : ''}>${c.name}</option>`).join('')}
-                            </select>
-                            <button onclick="app.clearFilters()" class="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 text-sm">
-                                <i class="fas fa-times"></i>
-                            </button>
-                        </div>
-                        <div class="flex gap-2">
-    <button onclick="app.showItemModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm md:text-base whitespace-nowrap">
-        <i class="fas fa-plus"></i> <span class="hidden sm:inline">${this.t('addNew')}</span>
-    </button>
-    <!-- REPLACE THE EXPORT DROPDOWN WITH THIS -->
-    <div class="relative" id="exportDropdownContainer">
-        <button onclick="app.toggleExportDropdown()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm whitespace-nowrap">
-            <i class="fas fa-file-excel"></i> <span class="hidden sm:inline">${this.t('export')}</span> <i class="fas fa-chevron-down text-xs"></i>
-        </button>
-        <div id="exportDropdown" class="hidden absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 z-20">
-            <button onclick="app.exportItems(); app.hideExportDropdown()" class="block w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm text-gray-700 dark:text-gray-300 first:rounded-t-lg">${this.t('exportItems')}</button>
-            <button onclick="app.downloadItemsTemplate(); app.hideExportDropdown()" class="block w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm text-gray-700 dark:text-gray-300 last:rounded-b-lg border-t border-gray-200 dark:border-gray-700">${this.t('downloadTemplate')}</button>
-        </div>
-    </div>
-    <!-- END REPLACE -->
-    <button onclick="app.showImportItemsModal()" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm whitespace-nowrap">
-        <i class="fas fa-upload"></i> <span class="hidden sm:inline">${this.t('import')}</span>
-    </button>
-</div>
-                    </div>
-                    
-                    <div class="table-container">
-                        <table class="w-full min-w-[600px]">
-                            <thead class="bg-gray-50 dark:bg-gray-700">
-                                <tr>
-                                    <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">${this.t('id')}</th>
-                                    <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">${this.t('name')}</th>
-                                    <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">${this.t('category')}</th>
-                                    <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden md:table-cell">${this.t('description')}</th>
-                                    <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">${this.t('actions')}</th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-                                ${paginated.length > 0 ? paginated.map(item => {
-                    const category = item.categories;
-                    return `
-                                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                                            <td class="px-4 md:px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">#${item.id.substr(-6)}</td>
-                                            <td class="px-4 md:px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">${item.name}</td>
-                                            <td class="px-4 md:px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">${category?.name || '-'}</td>
-                                            <td class="px-4 md:px-6 py-4 text-sm text-gray-500 dark:text-gray-400 max-w-xs truncate hidden md:table-cell">${item.description || '-'}</td>
-                                            <td class="px-4 md:px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                                <button onclick="app.showItemModal('${item.id}')" class="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 mr-3 p-2">
-                                                    <i class="fas fa-edit"></i>
-                                                </button>
-                                                <button onclick="app.deleteItem('${item.id}')" class="text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300 p-2">
-                                                    <i class="fas fa-trash"></i>
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    `;
-                }).join('') : `
-                                    <tr>
-                                        <td colspan="5" class="px-6 py-8 text-center text-gray-500 dark:text-gray-400">${this.t('noDataFound')}</td>
-                                    </tr>
-                                `}
-                            </tbody>
-                        </table>
-                    </div>
-                    
-                    ${this.renderPagination(items?.length || 0)}
+    container.innerHTML = `
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+            <div class="p-4 md:p-6 border-b border-gray-200 dark:border-gray-700 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div class="flex flex-col sm:flex-row gap-2 flex-1 w-full">
+                    <input type="text" id="searchInput" placeholder="${this.t('search')}" value="${this.filters.search}"
+                        oninput="app.handleSearch(this.value)"
+                        class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none flex-1 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm md:text-base">
+                    <select onchange="app.handleFilter('category', this.value)" class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm">
+                        <option value="">${this.t('filterByCategory')}</option>
+                        ${this.data.categories.map(c => `<option value="${c.id}" ${this.filters.category === c.id ? 'selected' : ''}>${c.name}</option>`).join('')}
+                    </select>
+                    <button onclick="app.clearFilters()" class="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 text-sm">
+                        <i class="fas fa-times"></i>
+                    </button>
                 </div>
-            `;
-            },
+                <div class="flex gap-2">
+                    <button onclick="app.showItemModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm md:text-base whitespace-nowrap">
+                        <i class="fas fa-plus"></i> <span class="hidden sm:inline">${this.t('addNew')}</span>
+                    </button>
+                    <div class="relative" id="exportDropdownContainer">
+                        <button onclick="app.toggleExportDropdown()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm whitespace-nowrap">
+                            <i class="fas fa-file-excel"></i> <span class="hidden sm:inline">${this.t('export')}</span> <i class="fas fa-chevron-down text-xs"></i>
+                        </button>
+                        <div id="exportDropdown" class="hidden absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 z-20">
+                            <button onclick="app.exportItems(); app.hideExportDropdown()" class="block w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm text-gray-700 dark:text-gray-300 first:rounded-t-lg">${this.t('exportItems')}</button>
+                            <button onclick="app.downloadItemsTemplate(); app.hideExportDropdown()" class="block w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm text-gray-700 dark:text-gray-300 last:rounded-b-lg border-t border-gray-200 dark:border-gray-700">${this.t('downloadTemplate')}</button>
+                        </div>
+                    </div>
+                    <button onclick="app.showImportItemsModal()" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm whitespace-nowrap">
+                        <i class="fas fa-upload"></i> <span class="hidden sm:inline">${this.t('import')}</span>
+                    </button>
+                </div>
+            </div>
+            
+            <div id="itemsDataArea" class="page-data">
+                <div class="flex items-center justify-center p-8">
+                    <div class="spinner mr-2"></div>
+                    <span class="text-gray-600 dark:text-gray-400">${this.t('loading')}</span>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    await this.renderItemsData();
+},async renderItemsData() {
+    const container = document.getElementById('itemsDataArea');
+    if (!container) return;
+    
+    let query = this.supabase.from('items').select('*, categories(*)');
+    if (this.filters.search) query = query.ilike('name', `%${this.filters.search}%`);
+    if (this.filters.category) query = query.eq('category_id', this.filters.category);
 
+    const { data: items, error } = await query.order('created_at', { ascending: false });
+    if (error) {
+        container.innerHTML = `<div class="text-red-500 p-4">${this.t('error')}: ${error.message}</div>`;
+        return;
+    }
+
+    this.data.items = items || [];
+    const paginated = this.paginate(items || []);
+
+    container.innerHTML = `
+        <div class="table-container">
+            <table class="w-full min-w-[600px]">
+                <thead class="bg-gray-50 dark:bg-gray-700">
+                    <tr>
+                        <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">${this.t('id')}</th>
+                        <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">${this.t('name')}</th>
+                        <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">${this.t('category')}</th>
+                        <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden md:table-cell">${this.t('description')}</th>
+                        <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">${this.t('actions')}</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                    ${paginated.length > 0 ? paginated.map(item => {
+                        const category = item.categories;
+                        return `
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                                <td class="px-4 md:px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">#${item.id.substr(-6)}</td>
+                                <td class="px-4 md:px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">${item.name}</td>
+                                <td class="px-4 md:px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">${category?.name || '-'}</td>
+                                <td class="px-4 md:px-6 py-4 text-sm text-gray-500 dark:text-gray-400 max-w-xs truncate hidden md:table-cell">${item.description || '-'}</td>
+                                <td class="px-4 md:px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                    <button onclick="app.showItemModal('${item.id}')" class="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 mr-3 p-2"><i class="fas fa-edit"></i></button>
+                                    <button onclick="app.deleteItem('${item.id}')" class="text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300 p-2"><i class="fas fa-trash"></i></button>
+                                </td>
+                            </tr>
+                        `;
+                    }).join('') : `
+                        <tr><td colspan="5" class="px-6 py-8 text-center text-gray-500 dark:text-gray-400">${this.t('noDataFound')}</td></tr>
+                    `}
+                </tbody>
+            </table>
+        </div>
+        ${this.renderPagination(items?.length || 0)}
+    `;
+},
             async showItemModal(itemId = null) {
                 let item = null;
                 if (itemId) {
@@ -2010,6 +2004,39 @@
                     this.showNotification(error.message, 'error');
                 }
             },
+            async refreshPageData() {
+                const dataArea = document.querySelector('.page-data');
+                if (dataArea) {
+                    dataArea.innerHTML = '<div class="flex items-center justify-center p-8"><div class="spinner mr-2"></div><span class="text-gray-600 dark:text-gray-400">' + this.t('loading') + '</span></div>';
+                }
+
+                try {
+                    switch (this.currentPage) {
+                        case 'items':
+                            await this.renderItemsData();
+                            break;
+                        case 'stock':
+                            await this.renderStockData();
+                            break;
+                        case 'borrowRequests':
+                            await this.renderBorrowRequestsData();
+                            break;
+                        case 'borrowRecords':
+                            await this.renderBorrowRecordsData();
+                            break;
+                        case 'transactions':
+                            await this.renderTransactionsData();
+                            break;
+                        default:
+                            await this.refreshCurrentPage();
+                    }
+                } catch (error) {
+                    console.error('Data refresh error:', error);
+                    if (dataArea) {
+                        dataArea.innerHTML = '<div class="text-center text-red-500 p-4">' + this.t('error') + ': ' + error.message + '</div>';
+                    }
+                }
+            },
             // Toggle dropdowns
             toggleExportDropdown() {
                 const dropdown = document.getElementById('exportDropdown');
@@ -2055,86 +2082,86 @@
                 }
                 document.removeEventListener('click', this.closeStockExportDropdown);
             },
-// Export Stock to Excel
-async exportStock() {
-    try {
-        // Fetch stock data with related info
-        const { data: stockData, error } = await this.supabase
-            .from('stock_view')
-            .select('*')
-            .order('item_name');
-        
-        if (error) throw error;
-        
-        if (!stockData || stockData.length === 0) {
-            this.showNotification('No stock data to export', 'error');
-            return;
-        }
-        
-        // Format data for export
-        const exportData = stockData.map(s => ({
-            'Item Name': s.item_name,
-            'Category': s.category_name || '',
-            'Warehouse': s.warehouse_name,
-            'Quantity': s.quantity,
-            'Last Updated': s.updated_at ? new Date(s.updated_at).toLocaleString() : ''
-        }));
-        
-        const ws = XLSX.utils.json_to_sheet(exportData);
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Stock");
-        XLSX.writeFile(wb, `Stock_Export_${new Date().toISOString().split('T')[0]}.xlsx`);
-        this.showNotification(this.t('exportSuccess') || 'Export successful', 'success');
-    } catch (error) {
-        console.error('Export error:', error);
-        this.showNotification('Export failed: ' + error.message, 'error');
-    }
-},
+            // Export Stock to Excel
+            async exportStock() {
+                try {
+                    // Fetch stock data with related info
+                    const { data: stockData, error } = await this.supabase
+                        .from('stock_view')
+                        .select('*')
+                        .order('item_name');
 
-// Download Stock Import Template
-downloadStockTemplate() {
-    const template = [
-        { 
-            'ItemName': 'Sample Item 1', 
-            'Warehouse': 'Main Warehouse', 
-            'Quantity': 10 
-        },
-        { 
-            'ItemName': 'Sample Item 2', 
-            'Warehouse': 'Secondary Storage', 
-            'Quantity': 5 
-        },
-        { 
-            'ItemName': 'Laptop Dell', 
-            'Warehouse': 'Electronics WH', 
-            'Quantity': 3 
-        }
-    ];
-    
-    const ws = XLSX.utils.json_to_sheet(template);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Stock Import Template");
-    
-    // Add instructions as a second sheet (optional but helpful)
-    const instructions = [
-        { 'Instructions': '1. ItemName must match existing item names exactly' },
-        { 'Instructions': '2. Warehouse must match existing warehouse names exactly' },
-        { 'Instructions': '3. Quantity should be the absolute stock level (not delta)' },
-        { 'Instructions': '4. Existing stock will be updated, new entries will be created' },
-        { 'Instructions': '5. Do not change column headers' }
-    ];
-    const wsInstructions = XLSX.utils.json_to_sheet(instructions);
-    XLSX.utils.book_append_sheet(wb, wsInstructions, "Instructions");
-    
-    XLSX.writeFile(wb, "Stock_Import_Template.xlsx");
-    this.showNotification('Template downloaded', 'success');
-},
+                    if (error) throw error;
 
-// Import Stock from Excel
-async showImportStockModal() {
-    const modal = document.createElement('div');
-    modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 modal backdrop-blur-sm p-4';
-    modal.innerHTML = `
+                    if (!stockData || stockData.length === 0) {
+                        this.showNotification('No stock data to export', 'error');
+                        return;
+                    }
+
+                    // Format data for export
+                    const exportData = stockData.map(s => ({
+                        'Item Name': s.item_name,
+                        'Category': s.category_name || '',
+                        'Warehouse': s.warehouse_name,
+                        'Quantity': s.quantity,
+                        'Last Updated': s.updated_at ? new Date(s.updated_at).toLocaleString() : ''
+                    }));
+
+                    const ws = XLSX.utils.json_to_sheet(exportData);
+                    const wb = XLSX.utils.book_new();
+                    XLSX.utils.book_append_sheet(wb, ws, "Stock");
+                    XLSX.writeFile(wb, `Stock_Export_${new Date().toISOString().split('T')[0]}.xlsx`);
+                    this.showNotification(this.t('exportSuccess') || 'Export successful', 'success');
+                } catch (error) {
+                    console.error('Export error:', error);
+                    this.showNotification('Export failed: ' + error.message, 'error');
+                }
+            },
+
+            // Download Stock Import Template
+            downloadStockTemplate() {
+                const template = [
+                    {
+                        'ItemName': 'Sample Item 1',
+                        'Warehouse': 'Main Warehouse',
+                        'Quantity': 10
+                    },
+                    {
+                        'ItemName': 'Sample Item 2',
+                        'Warehouse': 'Secondary Storage',
+                        'Quantity': 5
+                    },
+                    {
+                        'ItemName': 'Laptop Dell',
+                        'Warehouse': 'Electronics WH',
+                        'Quantity': 3
+                    }
+                ];
+
+                const ws = XLSX.utils.json_to_sheet(template);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, "Stock Import Template");
+
+                // Add instructions as a second sheet (optional but helpful)
+                const instructions = [
+                    { 'Instructions': '1. ItemName must match existing item names exactly' },
+                    { 'Instructions': '2. Warehouse must match existing warehouse names exactly' },
+                    { 'Instructions': '3. Quantity should be the absolute stock level (not delta)' },
+                    { 'Instructions': '4. Existing stock will be updated, new entries will be created' },
+                    { 'Instructions': '5. Do not change column headers' }
+                ];
+                const wsInstructions = XLSX.utils.json_to_sheet(instructions);
+                XLSX.utils.book_append_sheet(wb, wsInstructions, "Instructions");
+
+                XLSX.writeFile(wb, "Stock_Import_Template.xlsx");
+                this.showNotification('Template downloaded', 'success');
+            },
+
+            // Import Stock from Excel
+            async showImportStockModal() {
+                const modal = document.createElement('div');
+                modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 modal backdrop-blur-sm p-4';
+                modal.innerHTML = `
         <div class="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-lg mx-4 fade-in border border-gray-200 dark:border-gray-700">
             <h3 class="text-lg font-semibold mb-4 text-gray-800 dark:text-white">${this.t('importStock')}</h3>
             
@@ -2173,71 +2200,71 @@ async showImportStockModal() {
             </div>
         </div>
     `;
-    document.body.appendChild(modal);
-},
+                document.body.appendChild(modal);
+            },
 
-async handleStockImport(input) {
-    const file = input.files[0];
-    if (!file) return;
-    
-    try {
-        const data = await file.arrayBuffer();
-        const workbook = XLSX.read(data);
-        const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-        const jsonData = XLSX.utils.sheet_to_json(worksheet);
-        
-        if (jsonData.length === 0) {
-            this.showNotification(this.t('invalidFile'), 'error');
-            return;
-        }
-        
-        // Fetch existing items and warehouses for validation
-        const [{ data: items }, { data: warehouses }] = await Promise.all([
-            this.supabase.from('items').select('id, name'),
-            this.supabase.from('warehouses').select('id, name')
-        ]);
-        
-        // Validate data
-        const validatedData = [];
-        const errors = [];
-        
-        jsonData.forEach((row, index) => {
-            const itemName = row.ItemName || row.itemName || row['Item Name'];
-            const warehouseName = row.Warehouse || row.warehouse;
-            const quantity = parseInt(row.Quantity || row.quantity);
-            
-            if (!itemName || !warehouseName || isNaN(quantity)) {
-                errors.push(`Row ${index + 1}: Missing required fields`);
-                return;
-            }
-            
-            const item = items.find(i => i.name.toLowerCase() === itemName.toLowerCase());
-            const warehouse = warehouses.find(w => w.name.toLowerCase() === warehouseName.toLowerCase());
-            
-            if (!item) {
-                errors.push(`Row ${index + 1}: Item "${itemName}" not found`);
-                return;
-            }
-            if (!warehouse) {
-                errors.push(`Row ${index + 1}: Warehouse "${warehouseName}" not found`);
-                return;
-            }
-            
-            validatedData.push({
-                item_id: item.id,
-                warehouse_id: warehouse.id,
-                item_name: item.name,
-                warehouse_name: warehouse.name,
-                quantity: quantity
-            });
-        });
-        
-        // Show preview
-        const previewDiv = document.getElementById('stockImportPreview');
-        const previewContent = document.getElementById('stockImportPreviewContent');
-        previewDiv.classList.remove('hidden');
-        
-        let previewHTML = `
+            async handleStockImport(input) {
+                const file = input.files[0];
+                if (!file) return;
+
+                try {
+                    const data = await file.arrayBuffer();
+                    const workbook = XLSX.read(data);
+                    const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const jsonData = XLSX.utils.sheet_to_json(worksheet);
+
+                    if (jsonData.length === 0) {
+                        this.showNotification(this.t('invalidFile'), 'error');
+                        return;
+                    }
+
+                    // Fetch existing items and warehouses for validation
+                    const [{ data: items }, { data: warehouses }] = await Promise.all([
+                        this.supabase.from('items').select('id, name'),
+                        this.supabase.from('warehouses').select('id, name')
+                    ]);
+
+                    // Validate data
+                    const validatedData = [];
+                    const errors = [];
+
+                    jsonData.forEach((row, index) => {
+                        const itemName = row.ItemName || row.itemName || row['Item Name'];
+                        const warehouseName = row.Warehouse || row.warehouse;
+                        const quantity = parseInt(row.Quantity || row.quantity);
+
+                        if (!itemName || !warehouseName || isNaN(quantity)) {
+                            errors.push(`Row ${index + 1}: Missing required fields`);
+                            return;
+                        }
+
+                        const item = items.find(i => i.name.toLowerCase() === itemName.toLowerCase());
+                        const warehouse = warehouses.find(w => w.name.toLowerCase() === warehouseName.toLowerCase());
+
+                        if (!item) {
+                            errors.push(`Row ${index + 1}: Item "${itemName}" not found`);
+                            return;
+                        }
+                        if (!warehouse) {
+                            errors.push(`Row ${index + 1}: Warehouse "${warehouseName}" not found`);
+                            return;
+                        }
+
+                        validatedData.push({
+                            item_id: item.id,
+                            warehouse_id: warehouse.id,
+                            item_name: item.name,
+                            warehouse_name: warehouse.name,
+                            quantity: quantity
+                        });
+                    });
+
+                    // Show preview
+                    const previewDiv = document.getElementById('stockImportPreview');
+                    const previewContent = document.getElementById('stockImportPreviewContent');
+                    previewDiv.classList.remove('hidden');
+
+                    let previewHTML = `
             <table class="w-full text-xs mb-3">
                 <thead class="bg-gray-100 dark:bg-gray-700">
                     <tr>
@@ -2260,9 +2287,9 @@ async handleStockImport(input) {
                 </tbody>
             </table>
         `;
-        
-        if (errors.length > 0) {
-            previewHTML += `
+
+                    if (errors.length > 0) {
+                        previewHTML += `
                 <div class="bg-red-50 dark:bg-red-900/20 p-3 rounded text-red-800 dark:text-red-300 text-xs mb-3">
                     <p class="font-medium">Errors found:</p>
                     <ul class="list-disc list-inside">
@@ -2271,57 +2298,57 @@ async handleStockImport(input) {
                     </ul>
                 </div>
             `;
-        }
-        
-        if (validatedData.length > 0) {
-            previewHTML += `
+                    }
+
+                    if (validatedData.length > 0) {
+                        previewHTML += `
                 <button onclick="app.confirmStockImport(${JSON.stringify(validatedData).replace(/"/g, '&quot;')})" 
                     class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg text-sm">
                     Import ${validatedData.length} Records
                 </button>
             `;
-        }
-        
-        previewContent.innerHTML = previewHTML;
-        
-    } catch (error) {
-        console.error(error);
-        this.showNotification(this.t('importError'), 'error');
-    }
-},
+                    }
 
-async confirmStockImport(data) {
-    try {
-        let imported = 0;
-        
-        for (const row of data) {
-            // Use upsert to insert or update stock
-            const { error } = await this.supabase
-                .from('stock')
-                .upsert({
-                    item_id: row.item_id,
-                    warehouse_id: row.warehouse_id,
-                    quantity: row.quantity,
-                    updated_at: new Date().toISOString()
-                }, {
-                    onConflict: ['item_id', 'warehouse_id']
-                });
-            
-            if (error) {
-                console.error('Error importing row:', error);
-                continue;
-            }
-            imported++;
-        }
-        
-        document.querySelector('.modal').remove();
-        this.showNotification(`${this.t('importSuccess')}: ${imported} records imported`, 'success');
-        this.refreshCurrentPage();
-        
-    } catch (error) {
-        this.showNotification(error.message, 'error');
-    }
-},
+                    previewContent.innerHTML = previewHTML;
+
+                } catch (error) {
+                    console.error(error);
+                    this.showNotification(this.t('importError'), 'error');
+                }
+            },
+
+            async confirmStockImport(data) {
+                try {
+                    let imported = 0;
+
+                    for (const row of data) {
+                        // Use upsert to insert or update stock
+                        const { error } = await this.supabase
+                            .from('stock')
+                            .upsert({
+                                item_id: row.item_id,
+                                warehouse_id: row.warehouse_id,
+                                quantity: row.quantity,
+                                updated_at: new Date().toISOString()
+                            }, {
+                                onConflict: ['item_id', 'warehouse_id']
+                            });
+
+                        if (error) {
+                            console.error('Error importing row:', error);
+                            continue;
+                        }
+                        imported++;
+                    }
+
+                    document.querySelector('.modal').remove();
+                    this.showNotification(`${this.t('importSuccess')}: ${imported} records imported`, 'success');
+                    this.refreshCurrentPage();
+
+                } catch (error) {
+                    this.showNotification(error.message, 'error');
+                }
+            },
             closeStockExportDropdown(e) {
                 const container = document.getElementById('stockExportDropdownContainer');
                 if (container && !container.contains(e.target)) {
@@ -2342,114 +2369,108 @@ async confirmStockImport(data) {
 
             // Stock Management
             async renderStock(container) {
-                const { data: stockView, error } = await this.supabase
-                    .from('stock_view')
-                    .select('*')
-                    .order('item_name');
+    const { data: warehouses } = await this.supabase.from('warehouses').select('*');
+    this.data.warehouses = warehouses || [];
 
-                if (error) {
-                    container.innerHTML = `<div class="text-red-500 p-4">${error.message}</div>`;
-                    return;
-                }
-
-                // Group by item
-                const grouped = {};
-                stockView?.forEach(s => {
-                    if (!grouped[s.item_id]) {
-                        grouped[s.item_id] = {
-                            item_name: s.item_name,
-                            category_name: s.category_name,
-                            warehouses: {}
-                        };
-                    }
-                    grouped[s.item_id].warehouses[s.warehouse_id] = s.quantity;
-                });
-
-                const { data: warehouses } = await this.supabase.from('warehouses').select('*');
-                this.data.warehouses = warehouses || [];
-
-                // Filter items
-                let items = Object.entries(grouped);
-                if (this.filters.search) {
-                    const search = this.filters.search.toLowerCase();
-                    items = items.filter(([_, item]) =>
-                        item.item_name.toLowerCase().includes(search) ||
-                        item.category_name?.toLowerCase().includes(search)
-                    );
-                }
-
-                const paginated = this.paginate(items);
-
-                container.innerHTML = `
-                <div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
-                    <div class="p-4 md:p-6 border-b border-gray-200 dark:border-gray-700 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                        <div class="flex flex-col sm:flex-row gap-2 flex-1 w-full">
-                            <input type="text" placeholder="${this.t('search')}" value="${this.filters.search}"
-                                oninput="app.handleSearch(this.value)"
-                                class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none flex-1 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm">
-                            <button onclick="app.showStockAdjustmentModal()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm whitespace-nowrap">
-                                <i class="fas fa-sliders-h"></i> <span class="hidden sm:inline">${this.t('adjustStock')}</span>
-                            </button>
-                        </div>
-                        <div class="flex gap-2">
-    <!-- REPLACE THE EXPORT DROPDOWN WITH THIS -->
-    <div class="relative" id="stockExportDropdownContainer">
-        <button onclick="app.toggleStockExportDropdown()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm whitespace-nowrap">
-            <i class="fas fa-file-excel"></i> <span class="hidden sm:inline">${this.t('export')}</span> <i class="fas fa-chevron-down text-xs"></i>
-        </button>
-        <div id="stockExportDropdown" class="hidden absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 z-20">
-            <button onclick="app.exportStock(); app.hideStockExportDropdown()" class="block w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm text-gray-700 dark:text-gray-300 first:rounded-t-lg">${this.t('exportStock')}</button>
-            <button onclick="app.downloadStockTemplate(); app.hideStockExportDropdown()" class="block w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm text-gray-700 dark:text-gray-300 last:rounded-b-lg border-t border-gray-200 dark:border-gray-700">${this.t('downloadTemplate')}</button>
-        </div>
-    </div>
-    <!-- END REPLACE -->
-    <button onclick="app.showImportStockModal()" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm whitespace-nowrap">
-        <i class="fas fa-upload"></i> <span class="hidden sm:inline">${this.t('import')}</span>
-    </button>
-</div>
-                    </div>
-                    
-                    <div class="table-container">
-                        <table class="w-full min-w-[600px]">
-                            <thead class="bg-gray-50 dark:bg-gray-700">
-                                <tr>
-                                    <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">${this.t('item')}</th>
-                                    <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">${this.t('category')}</th>
-                                    ${warehouses?.map(wh => `
-                                        <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">${wh.name}</th>
-                                    `).join('') || ''}
-                                    <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">${this.t('total')}</th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-                                ${paginated.length > 0 ? paginated.map(([itemId, item]) => {
-                    let total = 0;
-                    return `
-                                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                                            <td class="px-4 md:px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">${item.item_name}</td>
-                                            <td class="px-4 md:px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">${item.category_name || '-'}</td>
-                                            ${warehouses?.map(wh => {
-                        const qty = item.warehouses[wh.id] || 0;
-                        total += qty;
-                        return `<td class="px-4 md:px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">${qty}</td>`;
-                    }).join('') || ''}
-                                            <td class="px-4 md:px-6 py-4 whitespace-nowrap text-sm font-bold text-blue-600 dark:text-blue-400">${total}</td>
-                                        </tr>
-                                    `;
-                }).join('') : `
-                                    <tr>
-                                        <td colspan="${(warehouses?.length || 0) + 3}" class="px-6 py-8 text-center text-gray-500 dark:text-gray-400">${this.t('noDataFound')}</td>
-                                    </tr>
-                                `}
-                            </tbody>
-                        </table>
-                    </div>
-                    
-                    ${this.renderPagination(items.length)}
+    container.innerHTML = `
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+            <div class="p-4 md:p-6 border-b border-gray-200 dark:border-gray-700 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div class="flex flex-col sm:flex-row gap-2 flex-1 w-full">
+                    <input type="text" id="searchInput" placeholder="${this.t('search')}" value="${this.filters.search}"
+                        oninput="app.handleSearch(this.value)"
+                        class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none flex-1 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm">
+                    <button onclick="app.showStockAdjustmentModal()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm whitespace-nowrap">
+                        <i class="fas fa-sliders-h"></i> <span class="hidden sm:inline">${this.t('adjustStock')}</span>
+                    </button>
                 </div>
-            `;
-            },
+                <div class="flex gap-2">
+                    <div class="relative" id="stockExportDropdownContainer">
+                        <button onclick="app.toggleStockExportDropdown()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm whitespace-nowrap">
+                            <i class="fas fa-file-excel"></i> <span class="hidden sm:inline">${this.t('export')}</span> <i class="fas fa-chevron-down text-xs"></i>
+                        </button>
+                        <div id="stockExportDropdown" class="hidden absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-xl border border-gray-200 dark:border-gray-700 z-20">
+                            <button onclick="app.exportStock(); app.hideStockExportDropdown()" class="block w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm text-gray-700 dark:text-gray-300 first:rounded-t-lg">${this.t('exportStock')}</button>
+                            <button onclick="app.downloadStockTemplate(); app.hideStockExportDropdown()" class="block w-full text-left px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-700 text-sm text-gray-700 dark:text-gray-300 last:rounded-b-lg border-t border-gray-200 dark:border-gray-700">${this.t('downloadTemplate')}</button>
+                        </div>
+                    </div>
+                    <button onclick="app.showImportStockModal()" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm whitespace-nowrap">
+                        <i class="fas fa-upload"></i> <span class="hidden sm:inline">${this.t('import')}</span>
+                    </button>
+                </div>
+            </div>
+            
+            <div id="stockDataArea" class="page-data">
+                <div class="flex items-center justify-center p-8">
+                    <div class="spinner mr-2"></div>
+                    <span class="text-gray-600 dark:text-gray-400">${this.t('loading')}</span>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    await this.renderStockData();
+},async renderStockData() {
+    const container = document.getElementById('stockDataArea');
+    if (!container) return;
+    
+    const { data: stockView, error } = await this.supabase.from('stock_view').select('*').order('item_name');
+    if (error) {
+        container.innerHTML = `<div class="text-red-500 p-4">${error.message}</div>`;
+        return;
+    }
 
+    const grouped = {};
+    stockView?.forEach(s => {
+        if (!grouped[s.item_id]) {
+            grouped[s.item_id] = { item_name: s.item_name, category_name: s.category_name, warehouses: {} };
+        }
+        grouped[s.item_id].warehouses[s.warehouse_id] = s.quantity;
+    });
+
+    const warehouses = this.data.warehouses || [];
+    let items = Object.entries(grouped);
+    if (this.filters.search) {
+        const search = this.filters.search.toLowerCase();
+        items = items.filter(([_, item]) => item.item_name.toLowerCase().includes(search) || item.category_name?.toLowerCase().includes(search));
+    }
+
+    const paginated = this.paginate(items);
+
+    container.innerHTML = `
+        <div class="table-container">
+            <table class="w-full min-w-[600px]">
+                <thead class="bg-gray-50 dark:bg-gray-700">
+                    <tr>
+                        <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">${this.t('item')}</th>
+                        <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">${this.t('category')}</th>
+                        ${warehouses?.map(wh => `<th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">${wh.name}</th>`).join('') || ''}
+                        <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">${this.t('total')}</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                    ${paginated.length > 0 ? paginated.map(([itemId, item]) => {
+                        let total = 0;
+                        return `
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                                <td class="px-4 md:px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">${item.item_name}</td>
+                                <td class="px-4 md:px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">${item.category_name || '-'}</td>
+                                ${warehouses?.map(wh => {
+                                    const qty = item.warehouses[wh.id] || 0;
+                                    total += qty;
+                                    return `<td class="px-4 md:px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">${qty}</td>`;
+                                }).join('') || ''}
+                                <td class="px-4 md:px-6 py-4 whitespace-nowrap text-sm font-bold text-blue-600 dark:text-blue-400">${total}</td>
+                            </tr>
+                        `;
+                    }).join('') : `
+                        <tr><td colspan="${(warehouses?.length || 0) + 3}" class="px-6 py-8 text-center text-gray-500 dark:text-gray-400">${this.t('noDataFound')}</td></tr>
+                    `}
+                </tbody>
+            </table>
+        </div>
+        ${this.renderPagination(items.length)}
+    `;
+},
             async showStockAdjustmentModal() {
                 const { data: items } = await this.supabase.from('items').select('*').order('name');
                 const { data: warehouses } = await this.supabase.from('warehouses').select('*').order('name');
@@ -2554,112 +2575,111 @@ async confirmStockImport(data) {
             },
             // Borrow Requests
             async renderBorrowRequests(container) {
-                let query = this.supabase
-                    .from('borrow_requests')
-                    .select('*, profiles:user_id(full_name), borrow_request_items(*, items(name), warehouses(name))')
-                    .order('requested_at', { ascending: false });
-
-                if (this.filters.status) {
-                    query = query.eq('status', this.filters.status);
-                }
-
-                const { data: requests, error } = await query;
-
-                if (error) {
-                    container.innerHTML = `<div class="text-red-500 p-4">${error.message}</div>`;
-                    return;
-                }
-
-                this.data.borrowRequests = requests || [];
-                const paginated = this.paginate(requests || []);
-
-                container.innerHTML = `
-                <div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
-                    <div class="p-4 md:p-6 border-b border-gray-200 dark:border-gray-700 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                        <div class="flex flex-col sm:flex-row gap-2 flex-1 w-full">
-                            <select onchange="app.handleFilter('status', this.value)" class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm">
-                                <option value="">${this.t('filterByStatus')}</option>
-                                <option value="pending" ${this.filters.status === 'pending' ? 'selected' : ''}>${this.t('pending')}</option>
-                                <option value="approved" ${this.filters.status === 'approved' ? 'selected' : ''}>${this.t('approved')}</option>
-                                <option value="partiallyApproved" ${this.filters.status === 'partiallyApproved' ? 'selected' : ''}>${this.t('partiallyApproved')}</option>
-                                <option value="rejected" ${this.filters.status === 'rejected' ? 'selected' : ''}>${this.t('rejected')}</option>
-                            </select>
-                            <button onclick="app.clearFilters()" class="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 text-sm">
-                                <i class="fas fa-times"></i>
-                            </button>
-                        </div>
-                    </div>
-                    
-                    <div class="table-container">
-                        <table class="w-full min-w-[800px]">
-                            <thead class="bg-gray-50 dark:bg-gray-700">
-                                <tr>
-                                    <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">${this.t('id')}</th>
-                                    <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">${this.t('borrower')}</th>
-                                    <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">${this.t('items')}</th>
-                                    <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">${this.t('dates')}</th>
-                                    <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">${this.t('status')}</th>
-                                    <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">${this.t('actions')}</th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-                                ${paginated.length > 0 ? paginated.map(req => {
-                    const statusColors = {
-                        pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300',
-                        approved: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
-                        partiallyApproved: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
-                        rejected: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300'
-                    };
-                    return `
-                                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                                            <td class="px-4 md:px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">#${req.id.substr(-6)}</td>
-                                            <td class="px-4 md:px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">${req.profiles?.full_name || '-'}</td>
-                                            <td class="px-4 md:px-6 py-4 text-sm text-gray-900 dark:text-gray-100">
-                                                <div class="space-y-1">
-                                                    ${req.borrow_request_items?.map(it => `
-                                                        <div class="flex items-center gap-2">
-                                                            <span class="font-medium">${it.items?.name}</span>
-                                                            <span class="text-gray-500 dark:text-gray-400 text-xs">(${it.warehouses?.name})</span>
-                                                            <span class="bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded text-xs">${it.requested_quantity} qty</span>
-                                                        </div>
-                                                    `).join('') || ''}
-                                                </div>
-                                            </td>
-                                            <td class="px-4 md:px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                                                ${this.formatDate(req.start_date)} - ${this.formatDate(req.end_date)}
-                                            </td>
-                                            <td class="px-4 md:px-6 py-4 whitespace-nowrap">
-                                                <span class="px-2 py-1 text-xs font-semibold rounded-full ${statusColors[req.status] || 'bg-gray-100 dark:bg-gray-700'}">
-                                                    ${this.t(req.status)}
-                                                </span>
-                                            </td>
-                                            <td class="px-4 md:px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                                ${req.status === 'pending' ? `
-                                                    <button onclick="app.showProcessRequestModal('${req.id}')" class="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 font-medium">
-                                                        ${this.t('process')}
-                                                    </button>
-                                                ` : `
-                                                    <button onclick="app.viewRequestDetails('${req.id}')" class="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200">
-                                                        ${this.t('viewDetails')}
-                                                    </button>
-                                                `}
-                                            </td>
-                                        </tr>
-                                    `;
-                }).join('') : `
-                                    <tr>
-                                        <td colspan="6" class="px-6 py-8 text-center text-gray-500 dark:text-gray-400">${this.t('noDataFound')}</td>
-                                    </tr>
-                                `}
-                            </tbody>
-                        </table>
-                    </div>
-                    
-                    ${this.renderPagination(requests?.length || 0)}
+    container.innerHTML = `
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+            <div class="p-4 md:p-6 border-b border-gray-200 dark:border-gray-700 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div class="flex flex-col sm:flex-row gap-2 flex-1 w-full">
+                    <select onchange="app.handleFilter('status', this.value)" class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm">
+                        <option value="">${this.t('filterByStatus')}</option>
+                        <option value="pending" ${this.filters.status === 'pending' ? 'selected' : ''}>${this.t('pending')}</option>
+                        <option value="approved" ${this.filters.status === 'approved' ? 'selected' : ''}>${this.t('approved')}</option>
+                        <option value="partiallyApproved" ${this.filters.status === 'partiallyApproved' ? 'selected' : ''}>${this.t('partiallyApproved')}</option>
+                        <option value="rejected" ${this.filters.status === 'rejected' ? 'selected' : ''}>${this.t('rejected')}</option>
+                    </select>
+                    <button onclick="app.clearFilters()" class="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 text-sm">
+                        <i class="fas fa-times"></i>
+                    </button>
                 </div>
-            `;
-            },
+            </div>
+            
+            <div id="borrowRequestsDataArea" class="page-data">
+                <div class="flex items-center justify-center p-8">
+                    <div class="spinner mr-2"></div>
+                    <span class="text-gray-600 dark:text-gray-400">${this.t('loading')}</span>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    await this.renderBorrowRequestsData();
+},
+async renderBorrowRequestsData() {
+    const container = document.getElementById('borrowRequestsDataArea');
+    if (!container) return;
+    
+    let query = this.supabase
+        .from('borrow_requests')
+        .select('*, profiles:user_id(full_name), borrow_request_items(*, items(name), warehouses(name))')
+        .order('requested_at', { ascending: false });
+    if (this.filters.status) query = query.eq('status', this.filters.status);
 
+    const { data: requests, error } = await query;
+    if (error) {
+        container.innerHTML = `<div class="text-red-500 p-4">${error.message}</div>`;
+        return;
+    }
+
+    this.data.borrowRequests = requests || [];
+    const paginated = this.paginate(requests || []);
+
+    container.innerHTML = `
+        <div class="table-container">
+            <table class="w-full min-w-[800px]">
+                <thead class="bg-gray-50 dark:bg-gray-700">
+                    <tr>
+                        <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">${this.t('id')}</th>
+                        <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">${this.t('borrower')}</th>
+                        <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">${this.t('items')}</th>
+                        <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">${this.t('dates')}</th>
+                        <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">${this.t('status')}</th>
+                        <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">${this.t('actions')}</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                    ${paginated.length > 0 ? paginated.map(req => {
+                        const statusColors = {
+                            pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300',
+                            approved: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
+                            partiallyApproved: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
+                            rejected: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300'
+                        };
+                        return `
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                                <td class="px-4 md:px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">#${req.id.substr(-6)}</td>
+                                <td class="px-4 md:px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">${req.profiles?.full_name || '-'}</td>
+                                <td class="px-4 md:px-6 py-4 text-sm text-gray-900 dark:text-gray-100">
+                                    <div class="space-y-1">
+                                        ${req.borrow_request_items?.map(it => `
+                                            <div class="flex items-center gap-2">
+                                                <span class="font-medium">${it.items?.name}</span>
+                                                <span class="text-gray-500 dark:text-gray-400 text-xs">(${it.warehouses?.name})</span>
+                                                <span class="bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded text-xs">${it.requested_quantity} qty</span>
+                                            </div>
+                                        `).join('') || ''}
+                                    </div>
+                                </td>
+                                <td class="px-4 md:px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">${this.formatDate(req.start_date)} - ${this.formatDate(req.end_date)}</td>
+                                <td class="px-4 md:px-6 py-4 whitespace-nowrap">
+                                    <span class="px-2 py-1 text-xs font-semibold rounded-full ${statusColors[req.status] || 'bg-gray-100 dark:bg-gray-700'}">${this.t(req.status)}</span>
+                                </td>
+                                <td class="px-4 md:px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                    ${req.status === 'pending' ? `
+                                        <button onclick="app.showProcessRequestModal('${req.id}')" class="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 font-medium">${this.t('process')}</button>
+                                    ` : `
+                                        <button onclick="app.viewRequestDetails('${req.id}')" class="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200">${this.t('viewDetails')}</button>
+                                    `}
+                                </td>
+                            </tr>
+                        `;
+                    }).join('') : `
+                        <tr><td colspan="6" class="px-6 py-8 text-center text-gray-500 dark:text-gray-400">${this.t('noDataFound')}</td></tr>
+                    `}
+                </tbody>
+            </table>
+        </div>
+        ${this.renderPagination(requests?.length || 0)}
+    `;
+},
             async showProcessRequestModal(reqId) {
                 const { data: req } = await this.supabase
                     .from('borrow_requests')
@@ -2772,25 +2792,7 @@ async confirmStockImport(data) {
             // Borrow Records
             // Replace the renderBorrowRecords function with this updated version:
             async renderBorrowRecords(container) {
-                let query = this.supabase
-                    .from('borrow_records')
-                    .select('*, profiles:user_id(full_name), borrow_record_items(*, items(name), warehouses(name))')
-                    .order('borrowed_at', { ascending: false });
-
-                if (this.filters.status) {
-                    query = query.eq('status', this.filters.status);
-                }
-
-                const { data: records, error } = await query;
-
-                if (error) {
-                    container.innerHTML = `<div class="text-red-500 p-4">${error.message}</div>`;
-                    return;
-                }
-
-                const paginated = this.paginate(records || []);
-
-                container.innerHTML = `
+    container.innerHTML = `
         <div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
             <div class="p-4 md:p-6 border-b border-gray-200 dark:border-gray-700 flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div class="flex flex-col sm:flex-row gap-2 flex-1 w-full">
@@ -2805,95 +2807,109 @@ async confirmStockImport(data) {
                 </div>
             </div>
             
-            <div class="table-container">
-                <table class="w-full min-w-[800px]">
-                    <thead class="bg-gray-50 dark:bg-gray-700">
-                        <tr>
-                            <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">${this.t('id')}</th>
-                            <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">${this.t('borrower')}</th>
-                            <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">${this.t('items')}</th>
-                            <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">${this.t('dates')}</th>
-                            <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">${this.t('status')}</th>
-                            <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">${this.t('actions')}</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-                        ${paginated.length > 0 ? paginated.map(record => {
-                    const isOverdue = record.status === 'active' && new Date(record.end_date) < new Date();
-                    const totalItems = record.borrow_record_items?.length || 0;
-                    const returnedItems = record.borrow_record_items?.filter(i => i.returned_quantity >= i.quantity).length || 0;
-                    const isPartiallyReturned = returnedItems > 0 && returnedItems < totalItems;
-
-                    return `
-                                <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                                    <td class="px-4 md:px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">#${record.id.substr(-6)}</td>
-                                    <td class="px-4 md:px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">${record.profiles?.full_name || '-'}</td>
-                                    <td class="px-4 md:px-6 py-4 text-sm text-gray-900 dark:text-gray-100">
-                                        <div class="space-y-2">
-                                            ${record.borrow_record_items?.map(it => {
-                        const remaining = it.quantity - it.returned_quantity;
-                        const isFullyReturned = remaining === 0;
-                        const isPartiallyReturnedItem = it.returned_quantity > 0 && remaining > 0;
-
-                        return `
-                                                    <div class="flex items-center justify-between bg-gray-50 dark:bg-gray-700/30 p-2 rounded ${isFullyReturned ? 'opacity-60' : ''}">
-                                                        <div class="flex items-center gap-2">
-                                                            <span class="font-medium ${isFullyReturned ? 'line-through text-gray-500' : 'text-gray-900 dark:text-white'}">${it.items?.name}</span>
-                                                            <span class="text-xs text-gray-500 dark:text-gray-400">(${it.warehouses?.name})</span>
-                                                            ${isFullyReturned ? '<span class="text-xs text-green-600 font-medium">✓ Returned</span>' : ''}
-                                                            ${isPartiallyReturnedItem ? `<span class="text-xs text-yellow-600 font-medium">↻ Partial (${it.returned_quantity}/${it.quantity})</span>` : ''}
-                                                        </div>
-                                                        <div class="text-sm text-gray-600 dark:text-gray-400">
-                                                            ${isFullyReturned ?
-                                `<span class="text-green-600 dark:text-green-400">${it.quantity} returned</span>` :
-                                `<span class="${remaining < it.quantity ? 'text-yellow-600 dark:text-yellow-400' : ''}">
-                                                                    ${it.returned_quantity > 0 ? `${it.returned_quantity} of ` : ''}${it.quantity}
-                                                                </span>`
-                            }
-                                                        </div>
-                                                    </div>
-                                                `;
-                    }).join('') || ''}
-                                        </div>
-                                        ${isPartiallyReturned ? `
-                                            <div class="mt-2 text-xs text-yellow-600 dark:text-yellow-400 font-medium">
-                                                Progress: ${returnedItems}/${totalItems} items fully returned
-                                            </div>
-                                        ` : ''}
-                                    </td>
-                                    <td class="px-4 md:px-6 py-4 whitespace-nowrap text-sm ${isOverdue ? 'text-red-600 font-bold' : 'text-gray-500 dark:text-gray-400'}">
-                                        ${this.formatDate(record.borrowed_at)}<br>
-                                        <span class="text-xs">${this.t('to')}: ${this.formatDate(record.end_date)}</span>
-                                        ${isOverdue ? `<br><span class="text-xs">(${this.t('overdue')})</span>` : ''}
-                                    </td>
-                                    <td class="px-4 md:px-6 py-4 whitespace-nowrap">
-                                        <span class="px-2 py-1 text-xs font-semibold rounded-full ${record.status === 'active' ? (isPartiallyReturned ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300' : 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300') : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'}">
-                                            ${isPartiallyReturned ? 'Partial' : this.t(record.status)}
-                                        </span>
-                                    </td>
-                                    <td class="px-4 md:px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                        ${record.status === 'active' ? `
-                                            <button onclick="app.showPartialReturnModal('${record.id}')" class="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 mr-3">
-                                                ${returnedItems > 0 ? 'Continue Return' : this.t('markReturned')}
-                                            </button>
-                                        ` : '-'}
-                                    </td>
-                                </tr>
-                            `;
-                }).join('') : `
-                            <tr>
-                                <td colspan="6" class="px-6 py-8 text-center text-gray-500 dark:text-gray-400">${this.t('noDataFound')}</td>
-                            </tr>
-                        `}
-                    </tbody>
-                </table>
+            <div id="borrowRecordsDataArea" class="page-data">
+                <div class="flex items-center justify-center p-8">
+                    <div class="spinner mr-2"></div>
+                    <span class="text-gray-600 dark:text-gray-400">${this.t('loading')}</span>
+                </div>
             </div>
-            
-            ${this.renderPagination(records?.length || 0)}
         </div>
     `;
-            },
+    
+    await this.renderBorrowRecordsData();
+},
+async renderBorrowRecordsData() {
+    const container = document.getElementById('borrowRecordsDataArea');
+    if (!container) return;
+    
+    let query = this.supabase
+        .from('borrow_records')
+        .select('*, profiles:user_id(full_name), borrow_record_items(*, items(name), warehouses(name))')
+        .order('borrowed_at', { ascending: false });
+    if (this.filters.status) query = query.eq('status', this.filters.status);
 
+    const { data: records, error } = await query;
+    if (error) {
+        container.innerHTML = `<div class="text-red-500 p-4">${error.message}</div>`;
+        return;
+    }
+
+    const paginated = this.paginate(records || []);
+
+    container.innerHTML = `
+        <div class="table-container">
+            <table class="w-full min-w-[800px]">
+                <thead class="bg-gray-50 dark:bg-gray-700">
+                    <tr>
+                        <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">${this.t('id')}</th>
+                        <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">${this.t('borrower')}</th>
+                        <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">${this.t('items')}</th>
+                        <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">${this.t('dates')}</th>
+                        <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">${this.t('status')}</th>
+                        <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">${this.t('actions')}</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                    ${paginated.length > 0 ? paginated.map(record => {
+                        const isOverdue = record.status === 'active' && new Date(record.end_date) < new Date();
+                        const totalItems = record.borrow_record_items?.length || 0;
+                        const returnedItems = record.borrow_record_items?.filter(i => i.returned_quantity >= i.quantity).length || 0;
+                        const isPartiallyReturned = returnedItems > 0 && returnedItems < totalItems;
+
+                        return `
+                            <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                                <td class="px-4 md:px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">#${record.id.substr(-6)}</td>
+                                <td class="px-4 md:px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">${record.profiles?.full_name || '-'}</td>
+                                <td class="px-4 md:px-6 py-4 text-sm text-gray-900 dark:text-gray-100">
+                                    <div class="space-y-2">
+                                        ${record.borrow_record_items?.map(it => {
+                                            const remaining = it.quantity - it.returned_quantity;
+                                            const isFullyReturned = remaining === 0;
+                                            return `
+                                                <div class="flex items-center justify-between bg-gray-50 dark:bg-gray-700/30 p-2 rounded ${isFullyReturned ? 'opacity-60' : ''}">
+                                                    <div class="flex items-center gap-2">
+                                                        <span class="font-medium ${isFullyReturned ? 'line-through text-gray-500' : 'text-gray-900 dark:text-white'}">${it.items?.name}</span>
+                                                        <span class="text-xs text-gray-500 dark:text-gray-400">(${it.warehouses?.name})</span>
+                                                        ${isFullyReturned ? '<span class="text-xs text-green-600 font-medium">Returned</span>' : ''}
+                                                        ${(it.returned_quantity > 0 && !isFullyReturned) ? `<span class="text-xs text-yellow-600 font-medium">Partial (${it.returned_quantity}/${it.quantity})</span>` : ''}
+                                                    </div>
+                                                    <div class="text-sm text-gray-600 dark:text-gray-400">
+                                                        ${isFullyReturned ? `<span class="text-green-600 dark:text-green-400">${it.quantity} returned</span>` : `<span class="${remaining < it.quantity ? 'text-yellow-600 dark:text-yellow-400' : ''}">${it.returned_quantity > 0 ? `${it.returned_quantity} of ` : ''}${it.quantity}</span>`}
+                                                    </div>
+                                                </div>
+                                            `;
+                                        }).join('') || ''}
+                                    </div>
+                                    ${isPartiallyReturned ? `<div class="mt-2 text-xs text-yellow-600 dark:text-yellow-400 font-medium">Progress: ${returnedItems}/${totalItems} items fully returned</div>` : ''}
+                                </td>
+                                <td class="px-4 md:px-6 py-4 whitespace-nowrap text-sm ${isOverdue ? 'text-red-600 font-bold' : 'text-gray-500 dark:text-gray-400'}">
+                                    ${this.formatDate(record.borrowed_at)}<br>
+                                    <span class="text-xs">${this.t('to')}: ${this.formatDate(record.end_date)}</span>
+                                    ${isOverdue ? `<br><span class="text-xs">(${this.t('overdue')})</span>` : ''}
+                                </td>
+                                <td class="px-4 md:px-6 py-4 whitespace-nowrap">
+                                    <span class="px-2 py-1 text-xs font-semibold rounded-full ${record.status === 'active' ? (isPartiallyReturned ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300' : 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300') : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'}">
+                                        ${isPartiallyReturned ? 'Partial' : this.t(record.status)}
+                                    </span>
+                                </td>
+                                <td class="px-4 md:px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                    ${record.status === 'active' ? `
+                                        <button onclick="app.showPartialReturnModal('${record.id}')" class="text-blue-600 dark:text-blue-400 hover:text-blue-900 dark:hover:text-blue-300 mr-3">
+                                            ${returnedItems > 0 ? 'Continue Return' : this.t('markReturned')}
+                                        </button>
+                                    ` : '-'}
+                                </td>
+                            </tr>
+                        `;
+                    }).join('') : `
+                        <tr><td colspan="6" class="px-6 py-8 text-center text-gray-500 dark:text-gray-400">${this.t('noDataFound')}</td></tr>
+                    `}
+                </tbody>
+            </table>
+        </div>
+        ${this.renderPagination(records?.length || 0)}
+    `;
+},
             // Add this new function to show partial return modal
             async showPartialReturnModal(recordId) {
                 const { data: record } = await this.supabase
@@ -3220,73 +3236,81 @@ async confirmStockImport(data) {
 
             // Transactions
             async renderTransactions(container) {
-                const { data: transactions, error } = await this.supabase
-                    .from('transactions')
-                    .select('*, profiles:performed_by(full_name), transaction_items(*, items(name)), from_warehouse:from_warehouse_id(name), to_warehouse:to_warehouse_id(name), warehouse:warehouse_id(name)')
-                    .order('created_at', { ascending: false });
-
-                if (error) {
-                    container.innerHTML = `<div class="text-red-500 p-4">${error.message}</div>`;
-                    return;
-                }
-
-                container.innerHTML = `
-                <div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
-                    <div class="p-4 md:p-6 border-b border-gray-200 dark:border-gray-700 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                        <div class="flex flex-col sm:flex-row gap-2 flex-1 w-full">
-                            <input type="text" placeholder="${this.t('search')}" value="${this.filters.search}"
-                                oninput="app.handleSearch(this.value)"
-                                class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none flex-1 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm">
-                            <button onclick="app.showTransferModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm whitespace-nowrap">
-                                <i class="fas fa-exchange-alt"></i> <span class="hidden sm:inline">${this.t('transferStock')}</span>
-                            </button>
-                        </div>
-                    </div>
-                    
-                    <div class="table-container">
-                        <table class="w-full min-w-[700px]">
-                            <thead class="bg-gray-50 dark:bg-gray-700">
-                                <tr>
-                                    <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">${this.t('date')}</th>
-                                    <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">${this.t('type')}</th>
-                                    <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">${this.t('items')}</th>
-                                    <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">${this.t('from')}</th>
-                                    <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">${this.t('to')}</th>
-                                    <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">${this.t('by')}</th>
-                                </tr>
-                            </thead>
-                            <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
-                                ${transactions?.length > 0 ? transactions.map(t => `
-                                    <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                                        <td class="px-4 md:px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">${this.formatDate(t.created_at)}</td>
-                                        <td class="px-4 md:px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
-                                            <span class="px-2 py-1 rounded-full text-xs ${t.type === 'transfer' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300' : 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300'}">
-                                                ${this.t(t.type)}
-                                            </span>
-                                        </td>
-                                        <td class="px-4 md:px-6 py-4 text-sm text-gray-900 dark:text-gray-100">
-                                            <div class="space-y-1">
-                                                ${t.transaction_items?.map(it => `
-                                                    <div class="text-sm">${it.items?.name}: <span class="font-medium">${it.quantity}</span></div>
-                                                `).join('') || ''}
-                                            </div>
-                                        </td>
-                                        <td class="px-4 md:px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">${t.from_warehouse?.name || '-'}</td>
-                                        <td class="px-4 md:px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">${t.to_warehouse?.name || t.warehouse?.name || '-'}</td>
-                                        <td class="px-4 md:px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">${t.profiles?.full_name || '-'}</td>
-                                    </tr>
-                                `).join('') : `
-                                    <tr>
-                                        <td colspan="6" class="px-6 py-8 text-center text-gray-500 dark:text-gray-400">${this.t('noDataFound')}</td>
-                                    </tr>
-                                `}
-                            </tbody>
-                        </table>
-                    </div>
+    container.innerHTML = `
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden">
+            <div class="p-4 md:p-6 border-b border-gray-200 dark:border-gray-700 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div class="flex flex-col sm:flex-row gap-2 flex-1 w-full">
+                    <input type="text" id="searchInput" placeholder="${this.t('search')}" value="${this.filters.search}"
+                        oninput="app.handleSearch(this.value)"
+                        class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none flex-1 bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm">
+                    <button onclick="app.showTransferModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm whitespace-nowrap">
+                        <i class="fas fa-exchange-alt"></i> <span class="hidden sm:inline">${this.t('transferStock')}</span>
+                    </button>
                 </div>
-            `;
-            },
+            </div>
+            
+            <div id="transactionsDataArea" class="page-data">
+                <div class="flex items-center justify-center p-8">
+                    <div class="spinner mr-2"></div>
+                    <span class="text-gray-600 dark:text-gray-400">${this.t('loading')}</span>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    await this.renderTransactionsData();
+},
+async renderTransactionsData() {
+    const container = document.getElementById('transactionsDataArea');
+    if (!container) return;
+    
+    const { data: transactions, error } = await this.supabase
+        .from('transactions')
+        .select('*, profiles:performed_by(full_name), transaction_items(*, items(name)), from_warehouse:from_warehouse_id(name), to_warehouse:to_warehouse_id(name), warehouse:warehouse_id(name)')
+        .order('created_at', { ascending: false });
 
+    if (error) {
+        container.innerHTML = `<div class="text-red-500 p-4">${error.message}</div>`;
+        return;
+    }
+
+    container.innerHTML = `
+        <div class="table-container">
+            <table class="w-full min-w-[700px]">
+                <thead class="bg-gray-50 dark:bg-gray-700">
+                    <tr>
+                        <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">${this.t('date')}</th>
+                        <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">${this.t('type')}</th>
+                        <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">${this.t('items')}</th>
+                        <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">${this.t('from')}</th>
+                        <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">${this.t('to')}</th>
+                        <th class="px-4 md:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">${this.t('by')}</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                    ${transactions?.length > 0 ? transactions.map(t => `
+                        <tr class="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                            <td class="px-4 md:px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">${this.formatDate(t.created_at)}</td>
+                            <td class="px-4 md:px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
+                                <span class="px-2 py-1 rounded-full text-xs ${t.type === 'transfer' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300' : 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300'}">${this.t(t.type)}</span>
+                            </td>
+                            <td class="px-4 md:px-6 py-4 text-sm text-gray-900 dark:text-gray-100">
+                                <div class="space-y-1">
+                                    ${t.transaction_items?.map(it => `<div class="text-sm">${it.items?.name}: <span class="font-medium">${it.quantity}</span></div>`).join('') || ''}
+                                </div>
+                            </td>
+                            <td class="px-4 md:px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">${t.from_warehouse?.name || '-'}</td>
+                            <td class="px-4 md:px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">${t.to_warehouse?.name || t.warehouse?.name || '-'}</td>
+                            <td class="px-4 md:px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">${t.profiles?.full_name || '-'}</td>
+                        </tr>
+                    `).join('') : `
+                        <tr><td colspan="6" class="px-6 py-8 text-center text-gray-500 dark:text-gray-400">${this.t('noDataFound')}</td></tr>
+                    `}
+                </tbody>
+            </table>
+        </div>
+    `;
+},
             async showTransferModal() {
                 const { data: warehouses } = await this.supabase.from('warehouses').select('*');
 
@@ -3991,23 +4015,25 @@ async confirmStockImport(data) {
             `;
             },
 
-            goToPage(page) {
-                if (page < 1 || page > this.pagination.totalPages) return;
-                this.pagination.currentPage = page;
-                this.refreshCurrentPage();
-            },
 
             handleSearch(value) {
                 this.filters.search = value;
                 this.pagination.currentPage = 1;
-                this.refreshCurrentPage();
+                this.refreshPageData();
             },
 
             handleFilter(type, value) {
                 this.filters[type] = value;
                 this.pagination.currentPage = 1;
-                this.refreshCurrentPage();
+                this.refreshPageData();
             },
+
+            goToPage(page) {
+                if (page < 1 || page > this.pagination.totalPages) return;
+                this.pagination.currentPage = page;
+                this.refreshPageData();
+            },
+
 
             clearFilters() {
                 this.filters = { search: '', status: '', category: '', warehouse: '' };
